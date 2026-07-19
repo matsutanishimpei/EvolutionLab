@@ -13,6 +13,8 @@ public class SphereIndividual : MonoBehaviour
     public int CheckpointsPassed { get; private set; }
     public float ObstacleContactTime { get; private set; }
     public bool HeightViolation { get; private set; }
+    public float SpeedScore { get; private set; }
+    public bool HasReachedFinish { get; private set; }
 
     private readonly List<Rigidbody> partBodies = new List<Rigidbody>();
     private readonly List<HingeJoint> movingJoints = new List<HingeJoint>();
@@ -28,6 +30,9 @@ public class SphereIndividual : MonoBehaviour
     private float checkpointOpeningWidth;
     private float maximumAllowedHeight;
     private float maximumDownwindDistance;
+    private float courseEvaluationDuration;
+    private float currentElapsedTime;
+    private float finishDownwindPosition;
 
     public void Initialize(Genome genome, Color bodyColor)
     {
@@ -36,6 +41,8 @@ public class SphereIndividual : MonoBehaviour
         CheckpointsPassed = 0;
         ObstacleContactTime = 0f;
         HeightViolation = false;
+        SpeedScore = 0f;
+        HasReachedFinish = false;
 
         individualMaterial = new PhysicsMaterial($"{name}_Material")
         {
@@ -74,7 +81,9 @@ public class SphereIndividual : MonoBehaviour
         float[] gapOffsets,
         float openingWidth,
         float maxHeight,
-        float maxDistance)
+        float maxDistance,
+        float evaluationDuration,
+        float finishPosition)
     {
         courseWindDirection = windDirection.normalized;
         courseLineDirection = lineDirection.normalized;
@@ -84,6 +93,8 @@ public class SphereIndividual : MonoBehaviour
         checkpointOpeningWidth = openingWidth;
         maximumAllowedHeight = maxHeight;
         maximumDownwindDistance = maxDistance;
+        courseEvaluationDuration = evaluationDuration;
+        finishDownwindPosition = finishPosition;
     }
 
     private void CreateConnectedPart(int index, Rigidbody rootBody)
@@ -140,6 +151,7 @@ public class SphereIndividual : MonoBehaviour
     /// <summary>物理更新ごとに関節モーターと、面積に比例する風を適用します。</summary>
     public void Simulate(Vector3 windDirection, float windStrength, float elapsedTime)
     {
+        currentElapsedTime = elapsedTime;
         for (int i = 0; i < movingJoints.Count; i++)
         {
             int genomeIndex = i + 1;
@@ -185,14 +197,21 @@ public class SphereIndividual : MonoBehaviour
             HeightViolation = true;
         }
 
+        Vector3 center = CalculateCenter();
+        float downwindPosition = Vector3.Dot(center, courseWindDirection);
+        float lateralPosition = Vector3.Dot(center, courseLineDirection);
+
+        if (CheckpointsPassed >= checkpointDownwindPositions.Length
+            && downwindPosition >= finishDownwindPosition)
+        {
+            HasReachedFinish = true;
+        }
+
         if (CheckpointsPassed >= checkpointDownwindPositions.Length)
         {
             return;
         }
 
-        Vector3 center = CalculateCenter();
-        float downwindPosition = Vector3.Dot(center, courseWindDirection);
-        float lateralPosition = Vector3.Dot(center, courseLineDirection);
         float requiredLateralPosition = laneCenterCoordinate + checkpointGapOffsets[CheckpointsPassed];
 
         bool reachedCheckpoint = downwindPosition >= checkpointDownwindPositions[CheckpointsPassed];
@@ -201,6 +220,10 @@ public class SphereIndividual : MonoBehaviour
 
         if (reachedCheckpoint && insideOpening && !HeightViolation)
         {
+            // 同じ関門でも、早く到達するほど最大25点の速度ボーナスを得ます。
+            float normalizedRemainingTime = 1f
+                - Mathf.Clamp01(currentElapsedTime / courseEvaluationDuration);
+            SpeedScore += normalizedRemainingTime * 25f;
             CheckpointsPassed++;
         }
     }
@@ -222,6 +245,7 @@ public class SphereIndividual : MonoBehaviour
         // チェックポイント通過を最優先し、壁への接触を減点します。
         Fitness = CheckpointsPassed * 100f
             + downwindDistance
+            + SpeedScore
             - ObstacleContactTime * 10f;
 
         // 高く跳んで壁を越えた個体は失格扱いにし、横移動する個体を残します。
@@ -235,18 +259,6 @@ public class SphereIndividual : MonoBehaviour
             body.linearVelocity = Vector3.zero;
             body.angularVelocity = Vector3.zero;
             body.isKinematic = true;
-        }
-    }
-
-    /// <summary>最優秀個体の紹介中に、個体全体を拡大して指定位置へ移します。</summary>
-    public void PrepareShowcase(float scale, Vector3 showcaseCenter)
-    {
-        Vector3 currentCenter = CalculateCenter();
-        foreach (Rigidbody body in partBodies)
-        {
-            body.transform.position = showcaseCenter
-                + (body.transform.position - currentCenter) * scale;
-            body.transform.localScale *= scale;
         }
     }
 

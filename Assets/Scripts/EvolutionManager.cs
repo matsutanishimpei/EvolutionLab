@@ -25,21 +25,17 @@ public class EvolutionManager : MonoBehaviour
     [SerializeField, Min(1)] private int obstacleRowCount = 3;
     [SerializeField, Min(4f)] private float laneWidth = 10f;
     [SerializeField, Min(2f)] private float obstacleOpeningWidth = 4f;
-    [SerializeField, Min(1f)] private float obstacleHeight = 8f;
+    [SerializeField, Min(1f)] private float obstacleHeight = 4f;
     [SerializeField, Min(1f)] private float laneWallHeight = 5f;
     [SerializeField, Min(1f)] private float maximumAllowedHeight = 3.5f;
 
-    [Header("Champion Showcase")]
-    [SerializeField, Min(1)] private int fullDisplayInterval = 50;
-    [SerializeField, Min(1)] private int showcaseInterval = 100;
-    [SerializeField, Min(0.5f)] private float showcaseDuration = 4f;
-    [SerializeField, Min(1f)] private float showcaseScale = 2.5f;
-    [SerializeField, Range(1f, 20f)] private float fastForwardTimeScale = 10f;
+    [Header("Simulation Speed")]
+    [SerializeField, Range(1f, 100f)] private float fastForwardTimeScale = 30f;
 
     [Header("Champion Replay Recording")]
     [SerializeField, Min(1)] private int replayStartGeneration = 1;
     [SerializeField, Min(1)] private int replayInterval = 25;
-    [SerializeField, Min(1f)] private float replayDuration = 30f;
+    [SerializeField, Min(1f)] private float replayDuration = 50f;
     [SerializeField, Min(5f)] private float replayCameraDistance = 18f;
     [SerializeField, Min(5f)] private float replayCameraHeight = 14f;
     [SerializeField, Range(40f, 90f)] private float replayCameraFieldOfView = 70f;
@@ -133,17 +129,6 @@ public class EvolutionManager : MonoBehaviour
 
             EvaluateAndRank();
 
-            // 50世代ごとの全体動画は、この世代の評価終了時に録画を止めます。
-            if (generation % fullDisplayInterval == 0)
-            {
-                EvolutionRecordingEvents.StopRecording();
-            }
-
-            if (generation % showcaseInterval == 0)
-            {
-                yield return StartCoroutine(ShowChampion());
-            }
-
             if (ShouldRecordChampionReplay())
             {
                 yield return StartCoroutine(RecordChampionReplay());
@@ -178,6 +163,7 @@ public class EvolutionManager : MonoBehaviour
         {
             string line = $"{i + 1,3}. {individuals[i].name,-18} "
                 + $"CP: {individuals[i].CheckpointsPassed}/{obstacleRowCount}  "
+                + $"Speed: {individuals[i].SpeedScore:F1}  "
                 + $"Fitness: {individuals[i].Fitness:F2}";
             consoleRanking.AppendLine(line);
 
@@ -256,26 +242,22 @@ public class EvolutionManager : MonoBehaviour
                 checkpointGapOffsets,
                 obstacleOpeningWidth,
                 maximumAllowedHeight,
-                trackLength);
+                trackLength,
+                evaluationDuration,
+                trackLength * 0.5f);
             individuals.Add(individual);
         }
 
-        // 50世代ごとだけ全体を表示し、それ以外は非表示・高速で進化させます。
-        bool showFullGeneration = generation % fullDisplayInterval == 0;
+        // 通常世代は常に非表示・高速で進め、専用リプレイ時だけ描画します。
         foreach (SphereIndividual individual in individuals)
         {
-            individual.SetVisible(showFullGeneration);
+            individual.SetVisible(false);
         }
-        SetCourseVisible(showFullGeneration);
-        Time.timeScale = showFullGeneration ? 1f : fastForwardTimeScale;
-
-        if (showFullGeneration)
-        {
-            EvolutionRecordingEvents.StartRecording($"Generation_{generation:0000}_Full");
-        }
+        SetCourseVisible(false);
+        Time.timeScale = fastForwardTimeScale;
 
         Debug.Log($"第{generation}世代を開始しました。個体数: {individuals.Count}, "
-            + $"表示: {(showFullGeneration ? "ON" : "OFF")}, 時間倍率: {Time.timeScale:0.#}x");
+            + $"表示: OFF, 時間倍率: {Time.timeScale:0.#}x");
     }
 
     private void DestroyCurrentGeneration()
@@ -405,36 +387,6 @@ public class EvolutionManager : MonoBehaviour
         normalCameraFieldOfView = targetCamera.fieldOfView;
     }
 
-    /// <summary>100世代ごとに最優秀個体だけを拡大し、カメラで紹介します。</summary>
-    private IEnumerator ShowChampion()
-    {
-        Time.timeScale = 1f;
-        SetCourseVisible(true);
-        SphereIndividual champion = individuals[0];
-        foreach (SphereIndividual individual in individuals)
-        {
-            individual.SetVisible(individual == champion);
-        }
-
-        Vector3 showcaseCenter = Vector3.up * 4f;
-        champion.PrepareShowcase(showcaseScale, showcaseCenter);
-        targetCamera.transform.position = showcaseCenter + new Vector3(0f, 6f, -12f);
-        targetCamera.transform.LookAt(showcaseCenter);
-        rankingDisplay = $"GENERATION {generation} CHAMPION\n"
-            + $"Fitness: {champion.Fitness:F2} m\n"
-            + $"Parts: {champion.Genome.partCount}";
-
-        EvolutionRecordingEvents.StartRecording($"Champion_{generation:0000}");
-
-        yield return new WaitForSeconds(showcaseDuration);
-
-        EvolutionRecordingEvents.StopRecording();
-
-        targetCamera.transform.position = normalCameraPosition;
-        targetCamera.transform.rotation = normalCameraRotation;
-        targetCamera.fieldOfView = normalCameraFieldOfView;
-    }
-
     private bool ShouldRecordChampionReplay()
     {
         return generation >= replayStartGeneration
@@ -479,7 +431,9 @@ public class EvolutionManager : MonoBehaviour
             checkpointGapOffsets,
             obstacleOpeningWidth,
             maximumAllowedHeight,
-            trackLength);
+            trackLength,
+            evaluationDuration,
+            trackLength * 0.5f);
         replayStartTime = Time.time;
 
         rankingDisplay = $"GENERATION {generation} CHAMPION REPLAY\n"
@@ -487,7 +441,11 @@ public class EvolutionManager : MonoBehaviour
             + $"Parts: {individuals[0].Genome.partCount}";
         EvolutionRecordingEvents.StartRecording($"ChampionReplay_{generation:0000}");
 
-        yield return new WaitForSeconds(replayDuration);
+        float replayEndTime = Time.time + replayDuration;
+        while (Time.time < replayEndTime && !replayIndividual.HasReachedFinish)
+        {
+            yield return null;
+        }
 
         EvolutionRecordingEvents.StopRecording();
         replayIndividual.EvaluateAndStop(windDirection);
@@ -543,15 +501,15 @@ public class EvolutionManager : MonoBehaviour
 
     private void OnGUI()
     {
-        if (generation % fullDisplayInterval != 0 && generation % showcaseInterval != 0)
+        if (replayIndividual != null && !string.IsNullOrEmpty(rankingDisplay))
+        {
+            GUI.Box(new Rect(10f, 10f, 390f, 120f), rankingDisplay);
+        }
+        else
         {
             GUI.Box(
                 new Rect(10f, 10f, 300f, 70f),
                 $"FAST EVOLUTION\nGeneration {generation}\nTime Scale: {Time.timeScale:0.#}x");
-        }
-        else if (!string.IsNullOrEmpty(rankingDisplay))
-        {
-            GUI.Box(new Rect(10f, 10f, 390f, 465f), rankingDisplay);
         }
     }
 }

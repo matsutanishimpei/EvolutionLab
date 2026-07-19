@@ -16,8 +16,9 @@ public class SphereIndividual : MonoBehaviour
     private readonly List<GameObject> childParts = new List<GameObject>();
     private Vector3 startCenter;
     private PhysicsMaterial individualMaterial;
+    private Material visualMaterial;
 
-    public void Initialize(Genome genome)
+    public void Initialize(Genome genome, Color bodyColor)
     {
         Genome = genome.Clone();
         Fitness = 0f;
@@ -30,6 +31,13 @@ public class SphereIndividual : MonoBehaviour
             frictionCombine = PhysicsMaterialCombine.Average,
             bounceCombine = PhysicsMaterialCombine.Average
         };
+
+        Shader bodyShader = Shader.Find("Universal Render Pipeline/Lit");
+        if (bodyShader == null)
+        {
+            bodyShader = Shader.Find("Standard");
+        }
+        visualMaterial = new Material(bodyShader) { color = bodyColor };
 
         Rigidbody rootBody = GetComponent<Rigidbody>();
         ConfigurePart(gameObject, rootBody, Genome.partSizes[0]);
@@ -90,6 +98,7 @@ public class SphereIndividual : MonoBehaviour
         body.linearDamping = Genome.drag;
         body.angularDamping = Genome.angularDrag;
         part.GetComponent<Collider>().material = individualMaterial;
+        part.GetComponent<Renderer>().sharedMaterial = visualMaterial;
     }
 
     /// <summary>物理更新ごとに関節モーターと、面積に比例する風を適用します。</summary>
@@ -134,6 +143,50 @@ public class SphereIndividual : MonoBehaviour
         }
     }
 
+    /// <summary>最優秀個体の紹介中に、個体全体を拡大して指定位置へ移します。</summary>
+    public void PrepareShowcase(float scale, Vector3 showcaseCenter)
+    {
+        Vector3 currentCenter = CalculateCenter();
+        foreach (Rigidbody body in partBodies)
+        {
+            body.transform.position = showcaseCenter
+                + (body.transform.position - currentCenter) * scale;
+            body.transform.localScale *= scale;
+        }
+    }
+
+    /// <summary>個体を構成する全パーツの表示・非表示を切り替えます。</summary>
+    public void SetVisible(bool visible)
+    {
+        foreach (Rigidbody body in partBodies)
+        {
+            Renderer partRenderer = body.GetComponent<Renderer>();
+            if (partRenderer != null)
+            {
+                partRenderer.enabled = visible;
+            }
+        }
+    }
+
+    /// <summary>リプレイ個体と評価済み個体が衝突しないようColliderを切り替えます。</summary>
+    public void SetCollisionEnabled(bool enabled)
+    {
+        foreach (Rigidbody body in partBodies)
+        {
+            Collider partCollider = body.GetComponent<Collider>();
+            if (partCollider != null)
+            {
+                partCollider.enabled = enabled;
+            }
+        }
+    }
+
+    /// <summary>カメラ追従用に、全パーツの中心位置を返します。</summary>
+    public Vector3 GetCenterPosition()
+    {
+        return CalculateCenter();
+    }
+
     private Vector3 CalculateCenter()
     {
         Vector3 center = Vector3.zero;
@@ -163,6 +216,11 @@ public class SphereIndividual : MonoBehaviour
         if (individualMaterial != null)
         {
             Destroy(individualMaterial);
+        }
+
+        if (visualMaterial != null)
+        {
+            Destroy(visualMaterial);
         }
     }
 }

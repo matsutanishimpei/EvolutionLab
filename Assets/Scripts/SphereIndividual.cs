@@ -10,6 +10,9 @@ public class SphereIndividual : MonoBehaviour
 {
     public Genome Genome { get; private set; }
     public float Fitness { get; private set; }
+    public int CheckpointsPassed { get; private set; }
+    public float ObstacleContactTime { get; private set; }
+    public bool HeightViolation { get; private set; }
 
     private readonly List<Rigidbody> partBodies = new List<Rigidbody>();
     private readonly List<HingeJoint> movingJoints = new List<HingeJoint>();
@@ -17,11 +20,22 @@ public class SphereIndividual : MonoBehaviour
     private Vector3 startCenter;
     private PhysicsMaterial individualMaterial;
     private Material visualMaterial;
+    private Vector3 courseWindDirection;
+    private Vector3 courseLineDirection;
+    private float laneCenterCoordinate;
+    private float[] checkpointDownwindPositions;
+    private float[] checkpointGapOffsets;
+    private float checkpointOpeningWidth;
+    private float maximumAllowedHeight;
+    private float maximumDownwindDistance;
 
     public void Initialize(Genome genome, Color bodyColor)
     {
         Genome = genome.Clone();
         Fitness = 0f;
+        CheckpointsPassed = 0;
+        ObstacleContactTime = 0f;
+        HeightViolation = false;
 
         individualMaterial = new PhysicsMaterial($"{name}_Material")
         {
@@ -49,6 +63,27 @@ public class SphereIndividual : MonoBehaviour
         }
 
         startCenter = CalculateCenter();
+    }
+
+    /// <summary>この個体が走るレーンの共通チェックポイント条件を設定します。</summary>
+    public void ConfigureCourse(
+        Vector3 windDirection,
+        Vector3 lineDirection,
+        float laneCenter,
+        float[] checkpointPositions,
+        float[] gapOffsets,
+        float openingWidth,
+        float maxHeight,
+        float maxDistance)
+    {
+        courseWindDirection = windDirection.normalized;
+        courseLineDirection = lineDirection.normalized;
+        laneCenterCoordinate = laneCenter;
+        checkpointDownwindPositions = checkpointPositions;
+        checkpointGapOffsets = gapOffsets;
+        checkpointOpeningWidth = openingWidth;
+        maximumAllowedHeight = maxHeight;
+        maximumDownwindDistance = maxDistance;
     }
 
     private void CreateConnectedPart(int index, Rigidbody rootBody)
@@ -99,6 +134,7 @@ public class SphereIndividual : MonoBehaviour
         body.angularDamping = Genome.angularDrag;
         part.GetComponent<Collider>().material = individualMaterial;
         part.GetComponent<Renderer>().sharedMaterial = visualMaterial;
+        part.AddComponent<IndividualCollisionSensor>().Initialize(this);
     }
 
     /// <summary>物理更新ごとに関節モーターと、面積に比例する風を適用します。</summary>
@@ -127,13 +163,72 @@ public class SphereIndividual : MonoBehaviour
             float projectedArea = Mathf.PI * radius * radius;
             body.AddForce(windDirection.normalized * windStrength * projectedArea, ForceMode.Force);
         }
+
+        UpdateCourseProgress();
+    }
+
+    private void UpdateCourseProgress()
+    {
+        if (checkpointDownwindPositions == null)
+        {
+            return;
+        }
+
+        float highestPart = float.MinValue;
+        foreach (Rigidbody body in partBodies)
+        {
+            highestPart = Mathf.Max(highestPart, body.worldCenterOfMass.y);
+        }
+
+        if (highestPart > maximumAllowedHeight)
+        {
+            HeightViolation = true;
+        }
+
+        if (CheckpointsPassed >= checkpointDownwindPositions.Length)
+        {
+            return;
+        }
+
+        Vector3 center = CalculateCenter();
+        float downwindPosition = Vector3.Dot(center, courseWindDirection);
+        float lateralPosition = Vector3.Dot(center, courseLineDirection);
+        float requiredLateralPosition = laneCenterCoordinate + checkpointGapOffsets[CheckpointsPassed];
+
+        bool reachedCheckpoint = downwindPosition >= checkpointDownwindPositions[CheckpointsPassed];
+        bool insideOpening = Mathf.Abs(lateralPosition - requiredLateralPosition)
+            <= checkpointOpeningWidth * 0.45f;
+
+        if (reachedCheckpoint && insideOpening && !HeightViolation)
+        {
+            CheckpointsPassed++;
+        }
+    }
+
+    public void RegisterObstacleContact(float contactDuration)
+    {
+        ObstacleContactTime += contactDuration;
     }
 
     public void EvaluateAndStop(Vector3 windDirection)
     {
         Vector3 horizontalWind = Vector3.ProjectOnPlane(windDirection, Vector3.up).normalized;
         Vector3 movement = Vector3.ProjectOnPlane(CalculateCenter() - startCenter, Vector3.up);
-        Fitness = Vector3.Dot(movement, horizontalWind);
+        float downwindDistance = Mathf.Clamp(
+            Vector3.Dot(movement, horizontalWind),
+            0f,
+            maximumDownwindDistance);
+
+        // チェックポイント通過を最優先し、壁への接触を減点します。
+        Fitness = CheckpointsPassed * 100f
+            + downwindDistance
+            - ObstacleContactTime * 10f;
+
+        // 高く跳んで壁を越えた個体は失格扱いにし、横移動する個体を残します。
+        if (HeightViolation)
+        {
+            Fitness = -1000f + CheckpointsPassed * 10f;
+        }
 
         foreach (Rigidbody body in partBodies)
         {

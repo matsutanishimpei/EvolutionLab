@@ -12,7 +12,7 @@ public class EvolutionManager : MonoBehaviour
     [SerializeField, Min(2)] private int populationSize = 20;
     [SerializeField, Min(2)] private int eliteCount = 4;
     [SerializeField, Range(0f, 1f)] private float mutationChance = 0.1f;
-    [SerializeField, Min(0.1f)] private float evaluationDuration = 10f;
+    [SerializeField, Min(0.1f)] private float evaluationDuration = 30f;
 
     [Header("Environment Settings")]
     [SerializeField] private Vector3 windDirection = Vector3.forward;
@@ -25,8 +25,9 @@ public class EvolutionManager : MonoBehaviour
     [SerializeField, Min(1)] private int obstacleRowCount = 3;
     [SerializeField, Min(4f)] private float laneWidth = 10f;
     [SerializeField, Min(2f)] private float obstacleOpeningWidth = 4f;
-    [SerializeField, Min(1f)] private float obstacleHeight = 3f;
+    [SerializeField, Min(1f)] private float obstacleHeight = 8f;
     [SerializeField, Min(1f)] private float laneWallHeight = 5f;
+    [SerializeField, Min(1f)] private float maximumAllowedHeight = 3.5f;
 
     [Header("Champion Showcase")]
     [SerializeField, Min(1)] private int fullDisplayInterval = 50;
@@ -38,7 +39,7 @@ public class EvolutionManager : MonoBehaviour
     [Header("Champion Replay Recording")]
     [SerializeField, Min(1)] private int replayStartGeneration = 1;
     [SerializeField, Min(1)] private int replayInterval = 25;
-    [SerializeField, Min(1f)] private float replayDuration = 10f;
+    [SerializeField, Min(1f)] private float replayDuration = 30f;
     [SerializeField, Min(5f)] private float replayCameraDistance = 18f;
     [SerializeField, Min(5f)] private float replayCameraHeight = 14f;
     [SerializeField, Range(40f, 90f)] private float replayCameraFieldOfView = 70f;
@@ -56,6 +57,8 @@ public class EvolutionManager : MonoBehaviour
     private Material obstacleMaterial;
     private SphereIndividual replayIndividual;
     private float replayStartTime;
+    private float[] checkpointDownwindPositions;
+    private float[] checkpointGapOffsets;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void CreateManagerIfNeeded()
@@ -173,7 +176,9 @@ public class EvolutionManager : MonoBehaviour
 
         for (int i = 0; i < individuals.Count; i++)
         {
-            string line = $"{i + 1,3}. {individuals[i].name,-18} Fitness: {individuals[i].Fitness:F2} m";
+            string line = $"{i + 1,3}. {individuals[i].name,-18} "
+                + $"CP: {individuals[i].CheckpointsPassed}/{obstacleRowCount}  "
+                + $"Fitness: {individuals[i].Fitness:F2}";
             consoleRanking.AppendLine(line);
 
             if (i < eliteCount)
@@ -242,6 +247,16 @@ public class EvolutionManager : MonoBehaviour
             float hue = Mathf.Repeat((float)i / genomes.Count + generation * 0.07f, 1f);
             Color bodyColor = Color.HSVToRGB(hue, 0.75f, 0.95f);
             individual.Initialize(genomes[i], bodyColor);
+            float laneCoordinate = (i - laneCenterOffset) * laneSpacing;
+            individual.ConfigureCourse(
+                horizontalWind,
+                lineDirection,
+                laneCoordinate,
+                checkpointDownwindPositions,
+                checkpointGapOffsets,
+                obstacleOpeningWidth,
+                maximumAllowedHeight,
+                trackLength);
             individuals.Add(individual);
         }
 
@@ -296,6 +311,21 @@ public class EvolutionManager : MonoBehaviour
         Vector3 lineDirection = Vector3.Cross(Vector3.up, horizontalWind).normalized;
         Quaternion obstacleRotation = Quaternion.LookRotation(horizontalWind, Vector3.up);
         obstacleMaterial = CreateColoredMaterial("Obstacle Material", new Color(0.9f, 0.32f, 0.08f));
+        checkpointDownwindPositions = new float[obstacleRowCount];
+        checkpointGapOffsets = new float[obstacleRowCount];
+
+        // どのレーンでも全く同じ順路となるチェックポイント座標を先に作ります。
+        for (int row = 0; row < obstacleRowCount; row++)
+        {
+            float rowProgress = (row + 1f) / (obstacleRowCount + 1f);
+            checkpointDownwindPositions[row] = Mathf.Lerp(
+                -trackLength * 0.15f,
+                trackLength * 0.38f,
+                rowProgress);
+            float obstacleSide = row % 2 == 0 ? -1f : 1f;
+            checkpointGapOffsets[row] = -obstacleSide
+                * (laneWidth * 0.5f - obstacleOpeningWidth * 0.5f);
+        }
 
         float laneCenterOffset = (populationSize - 1) * 0.5f;
         for (int lane = 0; lane < populationSize; lane++)
@@ -347,6 +377,7 @@ public class EvolutionManager : MonoBehaviour
         obstacle.transform.rotation = rotation;
         obstacle.transform.position = groundPosition + Vector3.up * (height * 0.5f);
         obstacle.transform.localScale = new Vector3(width, height, depth);
+        obstacle.AddComponent<EvolutionObstacle>();
         Renderer obstacleRenderer = obstacle.GetComponent<Renderer>();
         obstacleRenderer.sharedMaterial = obstacleMaterial;
         courseRenderers.Add(obstacleRenderer);
@@ -439,6 +470,16 @@ public class EvolutionManager : MonoBehaviour
         replayObject.transform.position = replayPosition;
         replayIndividual = replayObject.AddComponent<SphereIndividual>();
         replayIndividual.Initialize(individuals[0].Genome, new Color(1f, 0.75f, 0.08f));
+        float replayLaneCoordinate = (replayLane - laneCenterOffset) * laneSpacing;
+        replayIndividual.ConfigureCourse(
+            horizontalWind,
+            lineDirection,
+            replayLaneCoordinate,
+            checkpointDownwindPositions,
+            checkpointGapOffsets,
+            obstacleOpeningWidth,
+            maximumAllowedHeight,
+            trackLength);
         replayStartTime = Time.time;
 
         rankingDisplay = $"GENERATION {generation} CHAMPION REPLAY\n"

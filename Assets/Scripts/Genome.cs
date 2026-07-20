@@ -25,11 +25,11 @@ public class Genome
     public float friction;
     public float bounciness;
 
-    public static Genome CreateRandom()
+    public static Genome CreateRandom(EvolutionConfig.GenomeSettings settings)
     {
         Genome genome = new Genome
         {
-            partCount = UnityEngine.Random.Range(2, MaxParts + 1),
+            partCount = UnityEngine.Random.Range(settings.minimumParts, settings.maximumParts + 1),
             mass = UnityEngine.Random.Range(0.5f, 3f),
             drag = UnityEngine.Random.Range(0f, 0.5f),
             angularDrag = UnityEngine.Random.Range(0.05f, 0.8f),
@@ -39,7 +39,9 @@ public class Genome
 
         for (int i = 0; i < MaxParts; i++)
         {
-            genome.partSizes[i] = UnityEngine.Random.Range(0.45f, 1.25f);
+            genome.partSizes[i] = UnityEngine.Random.Range(
+                settings.initialMinimumPartSize,
+                settings.initialMaximumPartSize);
             genome.connectionX[i] = UnityEngine.Random.Range(-1f, 1f);
             genome.connectionY[i] = UnityEngine.Random.Range(-0.35f, 0.75f);
             genome.connectionZ[i] = UnityEngine.Random.Range(-1f, 1f);
@@ -79,10 +81,13 @@ public class Genome
     }
 
     /// <summary>各遺伝子へ個別に指定確率で小さな突然変異を加えます。</summary>
-    public void Mutate(float chance)
+    public void Mutate(float chance, EvolutionConfig.GenomeSettings settings)
     {
         if (UnityEngine.Random.value < chance)
-            partCount = Mathf.Clamp(partCount + (UnityEngine.Random.value < 0.5f ? -1 : 1), 2, MaxParts);
+            partCount = Mathf.Clamp(
+                partCount + (UnityEngine.Random.value < 0.5f ? -1 : 1),
+                settings.minimumParts,
+                settings.maximumParts);
 
         mass = MutateValue(mass, chance, 0.2f, 0.1f, 5f);
         drag = MutateValue(drag, chance, 0.08f, 0f, 2f);
@@ -92,7 +97,10 @@ public class Genome
 
         for (int i = 0; i < MaxParts; i++)
         {
-            partSizes[i] = MutateValue(partSizes[i], chance, 0.1f, 0.25f, 1.75f);
+            partSizes[i] = MutateValue(
+                partSizes[i], chance, 0.1f,
+                settings.minimumPartSize,
+                settings.maximumPartSize);
             connectionX[i] = MutateValue(connectionX[i], chance, 0.15f, -1f, 1f);
             connectionY[i] = MutateValue(connectionY[i], chance, 0.15f, -0.5f, 1f);
             connectionZ[i] = MutateValue(connectionZ[i], chance, 0.15f, -1f, 1f);

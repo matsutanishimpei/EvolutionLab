@@ -55,6 +55,8 @@ public class EvolutionManager : MonoBehaviour
     private float replayStartTime;
     private float[] checkpointDownwindPositions;
     private float[] checkpointGapOffsets;
+    private EvolutionConfig config;
+    private GeneticAlgorithm geneticAlgorithm;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void CreateManagerIfNeeded()
@@ -67,6 +69,10 @@ public class EvolutionManager : MonoBehaviour
 
     private void Start()
     {
+        config = EvolutionConfigLoader.Load();
+        ApplyConfiguration();
+        geneticAlgorithm = new GeneticAlgorithm(config);
+
         // 水平成分がない風向きは実験に使えないため、前方向へ補正します。
         if (Vector3.ProjectOnPlane(windDirection, Vector3.up).sqrMagnitude < 0.0001f)
         {
@@ -77,14 +83,37 @@ public class EvolutionManager : MonoBehaviour
         CreateObstacleCourse();
         SetupCamera();
 
-        List<Genome> firstGeneration = new List<Genome>();
-        for (int i = 0; i < populationSize; i++)
-        {
-            firstGeneration.Add(Genome.CreateRandom());
-        }
-
-        SpawnGeneration(firstGeneration);
+        SpawnGeneration(geneticAlgorithm.CreateInitialPopulation());
         StartCoroutine(EvolutionLoop());
+    }
+
+    private void ApplyConfiguration()
+    {
+        populationSize = config.population.size;
+        eliteCount = config.population.eliteCount;
+        mutationChance = config.population.mutationChance;
+        evaluationDuration = config.population.evaluationSeconds;
+        fastForwardTimeScale = config.population.fastForwardTimeScale;
+
+        windDirection = config.environment.windDirection;
+        windStrength = config.environment.windStrength;
+        laneSpacing = config.environment.laneSpacing;
+        startHeight = config.environment.startHeight;
+        trackLength = config.environment.trackLength;
+
+        obstacleRowCount = config.course.obstacleCount;
+        laneWidth = config.course.laneWidth;
+        obstacleOpeningWidth = config.course.openingWidth;
+        obstacleHeight = config.course.obstacleHeight;
+        laneWallHeight = config.course.laneWallHeight;
+        maximumAllowedHeight = config.fitness.maximumAllowedHeight;
+
+        replayStartGeneration = config.replay.firstGeneration;
+        replayInterval = config.replay.interval;
+        replayDuration = config.replay.maxSeconds;
+        replayCameraDistance = config.replay.cameraDistance;
+        replayCameraHeight = config.replay.cameraHeight;
+        replayCameraFieldOfView = config.replay.cameraFieldOfView;
     }
 
     /// <summary>
@@ -134,7 +163,7 @@ public class EvolutionManager : MonoBehaviour
                 yield return StartCoroutine(RecordChampionReplay());
             }
 
-            List<Genome> nextGeneration = CreateNextGeneration();
+            List<Genome> nextGeneration = geneticAlgorithm.CreateNextGeneration(individuals);
             DestroyCurrentGeneration();
 
             // Destroyの完了を待ち、旧世代と新世代の衝突を防ぎます。
@@ -177,36 +206,6 @@ public class EvolutionManager : MonoBehaviour
         Debug.Log(consoleRanking.ToString());
     }
 
-    /// <summary>上位エリートと、その交叉・突然変異による子を作ります。</summary>
-    private List<Genome> CreateNextGeneration()
-    {
-        int actualEliteCount = Mathf.Min(eliteCount, individuals.Count);
-        List<Genome> nextGeneration = new List<Genome>(populationSize);
-
-        for (int i = 0; i < actualEliteCount; i++)
-        {
-            nextGeneration.Add(individuals[i].Genome.Clone());
-        }
-
-        while (nextGeneration.Count < populationSize)
-        {
-            int parentAIndex = Random.Range(0, actualEliteCount);
-            int parentBIndex = Random.Range(0, actualEliteCount);
-            while (actualEliteCount > 1 && parentBIndex == parentAIndex)
-            {
-                parentBIndex = Random.Range(0, actualEliteCount);
-            }
-
-            Genome child = Genome.Crossover(
-                individuals[parentAIndex].Genome,
-                individuals[parentBIndex].Genome);
-            child.Mutate(mutationChance);
-            nextGeneration.Add(child);
-        }
-
-        return nextGeneration;
-    }
-
     /// <summary>全個体を風向きに直交するスタートラインへ等間隔で並べます。</summary>
     private void SpawnGeneration(List<Genome> genomes)
     {
@@ -244,7 +243,8 @@ public class EvolutionManager : MonoBehaviour
                 maximumAllowedHeight,
                 trackLength,
                 evaluationDuration,
-                trackLength * 0.5f);
+                trackLength * 0.5f,
+                config.fitness);
             individuals.Add(individual);
         }
 
@@ -433,7 +433,8 @@ public class EvolutionManager : MonoBehaviour
             maximumAllowedHeight,
             trackLength,
             evaluationDuration,
-            trackLength * 0.5f);
+            trackLength * 0.5f,
+            config.fitness);
         replayStartTime = Time.time;
 
         rankingDisplay = $"GENERATION {generation} CHAMPION REPLAY\n"

@@ -33,6 +33,7 @@ public class SphereIndividual : MonoBehaviour
     private float courseEvaluationDuration;
     private float currentElapsedTime;
     private float finishDownwindPosition;
+    private EvolutionConfig.FitnessSettings fitnessSettings;
 
     public void Initialize(Genome genome, Color bodyColor)
     {
@@ -83,7 +84,8 @@ public class SphereIndividual : MonoBehaviour
         float maxHeight,
         float maxDistance,
         float evaluationDuration,
-        float finishPosition)
+        float finishPosition,
+        EvolutionConfig.FitnessSettings scoring)
     {
         courseWindDirection = windDirection.normalized;
         courseLineDirection = lineDirection.normalized;
@@ -95,6 +97,7 @@ public class SphereIndividual : MonoBehaviour
         maximumDownwindDistance = maxDistance;
         courseEvaluationDuration = evaluationDuration;
         finishDownwindPosition = finishPosition;
+        fitnessSettings = scoring;
     }
 
     private void CreateConnectedPart(int index, Rigidbody rootBody)
@@ -223,7 +226,7 @@ public class SphereIndividual : MonoBehaviour
             // 同じ関門でも、早く到達するほど最大25点の速度ボーナスを得ます。
             float normalizedRemainingTime = 1f
                 - Mathf.Clamp01(currentElapsedTime / courseEvaluationDuration);
-            SpeedScore += normalizedRemainingTime * 25f;
+            SpeedScore += normalizedRemainingTime * fitnessSettings.speedRewardPerCheckpoint;
             CheckpointsPassed++;
         }
     }
@@ -242,17 +245,13 @@ public class SphereIndividual : MonoBehaviour
             0f,
             maximumDownwindDistance);
 
-        // チェックポイント通過を最優先し、壁への接触を減点します。
-        Fitness = CheckpointsPassed * 100f
-            + downwindDistance
-            + SpeedScore
-            - ObstacleContactTime * 10f;
-
-        // 高く跳んで壁を越えた個体は失格扱いにし、横移動する個体を残します。
-        if (HeightViolation)
-        {
-            Fitness = -1000f + CheckpointsPassed * 10f;
-        }
+        Fitness = FitnessEvaluator.Calculate(
+            CheckpointsPassed,
+            downwindDistance,
+            SpeedScore,
+            ObstacleContactTime,
+            HeightViolation,
+            fitnessSettings);
 
         foreach (Rigidbody body in partBodies)
         {

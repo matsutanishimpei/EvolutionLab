@@ -1,0 +1,47 @@
+{
+  "population": {
+    "size": 20,
+    "eliteCount": 4,
+    "mutationChance": 0.1,
+    "evaluationSeconds": 30,
+    "fastForwardTimeScale": 30
+  },
+  "environment": {
+    "windDirection": { "x": 0, "y": 0, "z": 1 },
+    "windStrength": 10,
+    "laneSpacing": 12,
+    "startHeight": 2,
+    "trackLength": 80
+  },
+  "course": {
+    "obstacleCount": 3,
+    "laneWidth": 10,
+    "openingWidth": 4,
+    "obstacleHeight": 4,
+    "laneWallHeight": 5
+  },
+  "fitness": {
+    "checkpointReward": 100,
+    "speedRewardPerCheckpoint": 25,
+    "wallContactPenaltyPerSecond": 10,
+    "maximumAllowedHeight": 3.5,
+    "heightViolationBaseFitness": -1000,
+    "heightViolationCheckpointReward": 10
+  },
+  "replay": {
+    "firstGeneration": 1,
+    "interval": 25,
+    "maxSeconds": 50,
+    "cameraDistance": 18,
+    "cameraHeight": 14,
+    "cameraFieldOfView": 70
+  },
+  "genome": {
+    "minimumParts": 2,
+    "maximumParts": 4,
+    "initialMinimumPartSize": 0.45,
+    "initialMaximumPartSize": 1.25,
+    "minimumPartSize": 0.25,
+    "maximumPartSize": 1.75
+  }
+}

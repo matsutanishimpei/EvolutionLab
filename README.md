@@ -2,7 +2,7 @@
 
 EvolutionLabは、Unity 6の3D物理環境で複数パーツの個体を進化させる遺伝的アルゴリズム実験です。
 
-各個体は2～4個のSphereとHingeJointで構成されます。全個体を同一構造の独立レーンで評価し、障害物の開口部を順番に通過する身体形状と周期運動を進化させます。
+各個体は既定で2～4個（設定変更で最大5個）のSphereとHingeJointで構成されます。全個体を同一構造の独立レーンで評価し、障害物の開口部を順番に通過する身体形状と周期運動を進化させます。
 
 ## 主な特徴
 
@@ -76,7 +76,10 @@ fitness =
 | `EvolutionConfig.cs` | JSON設定の読み込みと検証 |
 | `GeneticAlgorithm.cs` | 集団生成、選択、世代更新 |
 | `FitnessEvaluator.cs` | 最終fitnessの計算 |
-| `EvolutionManager.cs` | 実験全体の進行とリプレイ |
+| `EvolutionManager.cs` | 世代ライフサイクルの進行 |
+| `CourseBuilder.cs` / `CourseLayout.cs` | コース生成と座標情報 |
+| `IndividualFactory.cs` | Genomeから同一条件の個体を生成 |
+| `ChampionReplayController.cs` | チャンピオン再走、録画、カメラ制御 |
 
 ## 動画出力
 

@@ -23,11 +23,11 @@
 
 | 遺伝子 | 内容 | 第1世代の範囲 | 突然変異後の範囲 |
 |---|---|---:|---:|
-| `partSizes[i]` | パーツ直径 | 0.45～1.25 | 0.25～1.75 |
-| `connectionX[i]` | 接続方向X | -1～1 | -1～1 |
+| `parts[i].size` | パーツ直径 | 0.45～1.25 | 0.25～1.75 |
+| `parts[i].connection.x` | 接続方向X | -1～1 | -1～1 |
 | `connectionY[i]` | 接続方向Y | -0.35～0.75 | -0.5～1 |
 | `connectionZ[i]` | 接続方向Z | -1～1 | -1～1 |
-| `jointAmplitude[i]` | 関節の最大目標角速度 | 30～160 | 0～240 |
+| `parts[i].jointAmplitude` | 関節の最大目標角速度 | 30～160 | 0～240 |
 | `jointFrequency[i]` | 関節周期 | 0.4～2.0 Hz相当 | 0.1～3.0 Hz相当 |
 | `jointPhase[i]` | 初期位相 | 0～2π rad | 0～2π rad |
 

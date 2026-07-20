@@ -39,9 +39,17 @@
   "genome": {
     "minimumParts": 2,
     "maximumParts": 4,
-    "initialMinimumPartSize": 0.45,
-    "initialMaximumPartSize": 1.25,
-    "minimumPartSize": 0.25,
-    "maximumPartSize": 1.75
+    "partSize":       { "initialMin": 0.45, "initialMax": 1.25, "min": 0.25, "max": 1.75, "mutationAmount": 0.1 },
+    "connectionX":    { "initialMin": -1,   "initialMax": 1,    "min": -1,   "max": 1,    "mutationAmount": 0.15 },
+    "connectionY":    { "initialMin": -0.35,"initialMax": 0.75, "min": -0.5, "max": 1,    "mutationAmount": 0.15 },
+    "connectionZ":    { "initialMin": -1,   "initialMax": 1,    "min": -1,   "max": 1,    "mutationAmount": 0.15 },
+    "jointAmplitude": { "initialMin": 30,   "initialMax": 160,  "min": 0,    "max": 240,  "mutationAmount": 15 },
+    "jointFrequency": { "initialMin": 0.4,  "initialMax": 2,    "min": 0.1,  "max": 3,    "mutationAmount": 0.15 },
+    "jointPhase":     { "initialMin": 0,    "initialMax": 6.283185, "min": 0, "max": 6.283185, "mutationAmount": 0.3 },
+    "mass":           { "initialMin": 0.5,  "initialMax": 3,    "min": 0.1,  "max": 5,    "mutationAmount": 0.2 },
+    "drag":           { "initialMin": 0,    "initialMax": 0.5,  "min": 0,    "max": 2,    "mutationAmount": 0.08 },
+    "angularDrag":    { "initialMin": 0.05, "initialMax": 0.8,  "min": 0,    "max": 2,    "mutationAmount": 0.08 },
+    "friction":       { "initialMin": 0.1,  "initialMax": 1,    "min": 0,    "max": 1,    "mutationAmount": 0.1 },
+    "bounciness":     { "initialMin": 0,    "initialMax": 0.6,  "min": 0,    "max": 1,    "mutationAmount": 0.1 }
   }
 }

@@ -73,10 +73,18 @@
 |---|---|---|---:|---|
 | `minimumParts` | int | 個 | 2 | 最小パーツ数 |
 | `maximumParts` | int | 個 | 4 | 最大パーツ数。コード上限も4 |
-| `initialMinimumPartSize` | float | Unity unit | 0.45 | 第1世代の最小直径 |
-| `initialMaximumPartSize` | float | Unity unit | 1.25 | 第1世代の最大直径 |
-| `minimumPartSize` | float | Unity unit | 0.25 | 突然変異後の最小直径 |
-| `maximumPartSize` | float | Unity unit | 1.75 | 突然変異後の最大直径 |
+| `minimumParts` | int | 個 | 2 | 個体の最小部品数 |
+| `maximumParts` | int | 個 | 4 | 個体の最大部品数。現在は最大5まで設定可能 |
+
+各数値遺伝子は `partSize`、`connectionX/Y/Z`、`jointAmplitude`、`jointFrequency`、`jointPhase`、`mass`、`drag`、`angularDrag`、`friction`、`bounciness` の設定を持ちます。
+
+| 共通キー | 型 | 意味 |
+|---|---|---|
+| `initialMin` | float | 第1世代の乱数下限 |
+| `initialMax` | float | 第1世代の乱数上限 |
+| `min` | float | 突然変異後を含む絶対下限 |
+| `max` | float | 突然変異後を含む絶対上限 |
+| `mutationAmount` | float | 突然変異1回で加減する最大量 |
 
 ## 調整例
 

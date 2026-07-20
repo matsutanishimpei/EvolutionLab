@@ -4,87 +4,72 @@
 
 ```text
 EvolutionConfigLoader
-        ↓
-EvolutionManager ── Course / Wind / Replay
-        ↓
-GeneticAlgorithm ── Genome
-        ↓
-SphereIndividual ── Rigidbody / HingeJoint / Sensors
-        ↓
-FitnessEvaluator
+  -> CourseBuilder -> CourseLayout
+  -> IndividualFactory -> SphereIndividual
+  -> EvolutionManager -> GeneticAlgorithm / EvolutionRanking
+                      -> ChampionReplayController
+                           -> EvolutionCameraController / Recorder
 ```
 
-## 責務
+`EvolutionManager` はサービスを組み立て、世代の開始・評価・更新を順番に呼び出すだけです。物体の作り方や評価式を変更しても、世代ループへ影響しにくい構成にしています。
 
-### EvolutionManager
+## クラスの役割
 
-実験開始、物理更新、世代ループ、コース生成、ランキング、リプレイを統括します。選択・交叉の詳細とfitness式は他クラスへ委譲します。
+| クラス | 役割 |
+|---|---|
+| `EvolutionManager` | 実験開始と世代ライフサイクルの進行 |
+| `EvolutionConfig` | JSON設定の型、既定値、範囲検証 |
+| `CourseBuilder` | 床・レーン・障害物の生成、表示、破棄 |
+| `CourseLayout` | 風下・横方向、スタート地点、チェックポイント座標 |
+| `IndividualFactory` | Genomeから個体を生成し、同じ評価条件を設定 |
+| `SphereIndividual` | 身体構築、物理運動、計測状態 |
+| `Genome` / `PartGene` | 個体全体の物理遺伝子と部品単位の遺伝子 |
+| `GeneticAlgorithm` | 初期集団、エリート保存、親選択、交叉、突然変異 |
+| `EvolutionRanking` | 評価確定、順位付け、ログ作成 |
+| `FitnessEvaluator` | 計測値からfitnessを算出する純粋な評価式 |
+| `ChampionReplayController` | 再走個体、録画開始・終了、追従カメラの制御 |
+| `EvolutionHud` | 実験状態の画面表示 |
 
-### EvolutionConfig
+## Genomeの構造
 
-JSONのデータ構造と既定値を定義します。新しいゲームルール設定は、まず該当する設定セクションへ追加します。
+`Genome.parts` は `PartGene` の配列です。サイズ、接続方向、関節振幅、周期、位相が同じ部品オブジェクトにまとまっているため、並行配列の添字ずれが起きません。
 
-### GeneticAlgorithm
+内部上限は現在5部品です。通常はJSONの `minimumParts` と `maximumParts` だけで2〜5部品の範囲を変更できます。6部品以上へ拡張するときだけ `Genome.MaxParts` を変更します。
 
-初期集団、エリート保存、親選択、交叉、突然変異を担当します。シーンやRigidbodyには依存しません。
+## 遺伝子の範囲を変更する
 
-### Genome
+浮動小数点の各遺伝子は、JSON内の同じ形式で管理します。
 
-遺伝可能な値だけを保持します。環境条件やfitness配点は含めません。
+```json
+"mass": {
+  "initialMin": 0.5,
+  "initialMax": 3,
+  "min": 0.1,
+  "max": 5,
+  "mutationAmount": 0.2
+}
+```
 
-### SphereIndividual
+- `initialMin` / `initialMax`: 第1世代の乱数範囲
+- `min` / `max`: 突然変異後も超えない範囲
+- `mutationAmount`: 1回の突然変異で加減する最大値
 
-GenomeをGameObjectへ反映し、身体の物理状態と計測値を管理します。最終的な配点計算は行いません。
+新しい数値遺伝子を追加する場合は、`GenomeSettings`、JSON、`Genome` の生成・交叉・突然変異・複製、そして `SphereIndividual` の反映処理を更新します。部品に属する値は `PartGene` へ、個体全体の値は `Genome` へ追加してください。
 
-### FitnessEvaluator
+## ゲームルールを追加する
 
-計測済みの通過数、距離、速度、接触時間、高さ違反と設定値からfitnessを返します。Unityシーンの生成には依存しません。
+1. `EvolutionConfig` の適切な設定セクションへ既定値付きフィールドを追加します。
+2. `evolution-config.json` に同名キーを追加します。
+3. 値に制約があれば `EvolutionConfigLoader.Validate` で検証します。
+4. 該当サービスで設定を参照します。
+5. `Docs/CONFIGURATION.md` に型・単位・既定値を記載します。
 
-## 新しい設定を追加する
+## 今後の拡張候補
 
-1. `EvolutionConfig`の適切なセクションへフィールドと既定値を追加します。
-2. `evolution-config.json`へ同名キーを追加します。
-3. 必要なら`EvolutionConfigLoader.Validate`へ範囲検証を追加します。
-4. 使用するサービスまたはManagerへ値を渡します。
-5. `Docs/CONFIGURATION.md`へ型、単位、既定値を追記します。
+- 乱数seedと世代ごとのGenomeを保存し、実験を再現可能にする
+- コース生成方式をインターフェース化し、複数ルールを差し替える
+- Genomeと評価結果のバージョンを持ち、古い保存データを移行する
+- `FitnessEvaluator` と遺伝操作へEditModeテストを追加する
+- センサー入力と関節制御を別Controllerへ分離する
 
-## 新しい遺伝子を追加する
-
-1. `Genome`へ遺伝子フィールドを追加します。
-2. `CreateRandom`へ初期生成を追加します。
-3. `Crossover`へ親A/Bの50%選択を追加します。
-4. `Mutate`へ突然変異量とClamp範囲を追加します。
-5. `Clone`へコピーを追加します。
-6. `SphereIndividual`で身体または制御へ反映します。
-7. 必要な範囲を`EvolutionConfig.GenomeSettings`とJSONへ追加します。
-8. `Docs/EVOLUTION.md`へ意味と単位を追記します。
-
-この手順を1か所へ集約するため、将来は遺伝子定義を型単位へ分割する余地があります。ただし文字列辞書だけのGenomeは型安全性を失うため、強く型付けしたフィールドを維持する方針です。
-
-## 新しいfitness項目を追加する
-
-1. `SphereIndividual`へ計測値を追加します。
-2. `EvolutionConfig.FitnessSettings`へ配点を追加します。
-3. JSONへ値を追加します。
-4. `FitnessEvaluator.Calculate`へ式を追加します。
-5. ランキング表示とドキュメントを更新します。
-
-## 超音波センサーを追加する案
-
-センサー本体は全個体共通の固定能力とし、センサーへの反応だけをGenome化すると公平です。
-
-推奨構成：
-
-- ルートパーツへ前、左前、右前のRaycastを固定
-- 距離を0～1へ正規化
-- センサー値から各関節の振幅または位相を補正
-- 補正重みを`ControllerGenome`として遺伝
-- Raycast距離、角度、更新頻度は環境設定として共通化
-
-## 再現性
-
-現在はUnityのグローバル乱数を使用しており、乱数シードは外部設定されていません。実験再現性を高める場合は、設定へ`randomSeed`を追加し、開始時に`Random.InitState`を呼びます。
-
-## 今後分離できる領域
-
-`EvolutionManager`にはコース生成とリプレイ制御が残っています。規模が増えた場合は、`CourseBuilder`と`ReplayController`へ分離するのが次の候補です。
+この構成は拡張箇所を局所化していますが、完成形を固定するものではありません。ルールの種類が増えた時点で、共通インターフェースを追加するのが適切です。

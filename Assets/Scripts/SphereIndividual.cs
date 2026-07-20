@@ -62,7 +62,7 @@ public class SphereIndividual : MonoBehaviour
         visualMaterial = new Material(bodyShader) { color = bodyColor };
 
         Rigidbody rootBody = GetComponent<Rigidbody>();
-        ConfigurePart(gameObject, rootBody, Genome.partSizes[0]);
+        ConfigurePart(gameObject, rootBody, Genome.parts[0].size);
         partBodies.Add(rootBody);
 
         for (int i = 1; i < Genome.partCount; i++)
@@ -102,18 +102,16 @@ public class SphereIndividual : MonoBehaviour
 
     private void CreateConnectedPart(int index, Rigidbody rootBody)
     {
-        Vector3 direction = new Vector3(
-            Genome.connectionX[index],
-            Genome.connectionY[index],
-            Genome.connectionZ[index]).normalized;
+        Genome.PartGene gene = Genome.parts[index];
+        Vector3 direction = gene.connection.normalized;
 
         if (direction.sqrMagnitude < 0.001f)
         {
             direction = Vector3.right;
         }
 
-        float rootRadius = Genome.partSizes[0] * 0.5f;
-        float childRadius = Genome.partSizes[index] * 0.5f;
+        float rootRadius = Genome.parts[0].size * 0.5f;
+        float childRadius = gene.size * 0.5f;
 
         GameObject part = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         part.name = $"{name}_Part_{index + 1}";
@@ -121,7 +119,7 @@ public class SphereIndividual : MonoBehaviour
         childParts.Add(part);
 
         Rigidbody body = part.AddComponent<Rigidbody>();
-        ConfigurePart(part, body, Genome.partSizes[index]);
+        ConfigurePart(part, body, gene.size);
         partBodies.Add(body);
 
         HingeJoint joint = part.AddComponent<HingeJoint>();
@@ -158,11 +156,11 @@ public class SphereIndividual : MonoBehaviour
         for (int i = 0; i < movingJoints.Count; i++)
         {
             int genomeIndex = i + 1;
-            float angle = elapsedTime * Genome.jointFrequency[genomeIndex] * Mathf.PI * 2f
-                + Genome.jointPhase[genomeIndex];
+            Genome.PartGene gene = Genome.parts[genomeIndex];
+            float angle = elapsedTime * gene.jointFrequency * Mathf.PI * 2f + gene.jointPhase;
 
             JointMotor motor = movingJoints[i].motor;
-            motor.targetVelocity = Mathf.Sin(angle) * Genome.jointAmplitude[genomeIndex];
+            motor.targetVelocity = Mathf.Sin(angle) * gene.jointAmplitude;
             movingJoints[i].motor = motor;
         }
 
@@ -174,7 +172,7 @@ public class SphereIndividual : MonoBehaviour
                 continue;
             }
 
-            float radius = Genome.partSizes[i] * 0.5f;
+            float radius = Genome.parts[i].size * 0.5f;
             float projectedArea = Mathf.PI * radius * radius;
             body.AddForce(windDirection.normalized * windStrength * projectedArea, ForceMode.Force);
         }
